@@ -31,6 +31,18 @@ export default function DashboardPage() {
     fetchRecords()
   }, [])
 
+  // Auto-redirect to Stripe checkout if user just signed up and has no subscription
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success')) return // already paid
+    const needsCheckout = localStorage.getItem('freeRecordUsed')
+    if (needsCheckout && records.length === 0) {
+      // New user from the payment gate — send them to checkout
+      localStorage.removeItem('freeRecordUsed')
+      handleSubscribe()
+    }
+  }, [records])
+
   const fetchRecords = async () => {
     const res = await fetch('/api/records')
     const data = await res.json()

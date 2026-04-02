@@ -16,7 +16,7 @@ interface Message {
 
 export default function HomePage() {
   const router = useRouter()
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, isLoaded } = useAuth()
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -49,12 +49,14 @@ export default function HomePage() {
   }, [])
 
   const startRecording = async () => {
-    if (!isSignedIn) {
-      const freeRecordUsed = localStorage.getItem('freeRecordUsed')
-      if (freeRecordUsed) {
-        setShowAuthModal(true)
-        return
-      }
+    // Wait for Clerk to finish loading before checking auth state
+    if (!isLoaded) return
+
+    // Gate logic: anonymous users get 1 free recording, then must sign up
+    const freeRecordUsed = localStorage.getItem('freeRecordUsed')
+    if (!isSignedIn && freeRecordUsed) {
+      setShowAuthModal(true)
+      return
     }
 
     try {
@@ -136,6 +138,12 @@ export default function HomePage() {
   const processAudio = async (audioBlob: Blob) => {
     setIsProcessing(true)
 
+    // Mark free record as used immediately for anonymous users
+    // (before API calls, so refreshing mid-process still counts)
+    if (!isSignedIn) {
+      localStorage.setItem('freeRecordUsed', 'true')
+    }
+
     try {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.webm')
@@ -185,10 +193,6 @@ export default function HomePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ transcription: whisperData.text, aiResponse: response }),
         })
-      }
-
-      if (!isSignedIn) {
-        localStorage.setItem('freeRecordUsed', 'true')
       }
     } catch (error) {
       console.error('Processing error:', error)
@@ -376,7 +380,7 @@ export default function HomePage() {
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">Sign up to continue</h3>
               <p className="text-white/50 text-sm mb-6">
-                Your free recording has been used. Create an account for unlimited access.
+                Your free recording has been used. Create an account and subscribe for unlimited access.
               </p>
               <div className="flex gap-3 justify-center">
                 <Button
@@ -385,6 +389,12 @@ export default function HomePage() {
                   onClick={() => setShowAuthModal(false)}
                 >
                   Cancel
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
+                  onClick={() => router.push('/sign-in')}
+                >
+                  Sign In
                 </Button>
                 <Button
                   className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
