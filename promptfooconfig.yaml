@@ -1,0 +1,51 @@
+# promptfooconfig.yaml
+# Promptfoo — prompt testing tool (from Fireship: 7 new open-source AI tools)
+# We use it to evaluate and compare AI responses for our Voice-to-Text chat feature
+
+description: "Micro MVP — Voice-to-Text Chat Quality Evaluation"
+
+prompts:
+  - id: chat-response
+    raw: |
+      You are a helpful assistant in a Voice-to-Text SaaS app.
+      The user has just transcribed their voice recording.
+      Transcription: "{{transcription}}"
+      Provide a helpful, concise response or summary.
+
+providers:
+  - id: openai:chat:openai/gpt-4o
+    label: GPT-4o
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      apiKeyEnvar: OPENROUTER_API_KEY
+  - id: openai:chat:anthropic/claude-sonnet-4.6
+    label: Claude Sonnet 4.6
+    config:
+      apiBaseUrl: https://openrouter.ai/api/v1
+      apiKeyEnvar: OPENROUTER_API_KEY
+
+tests:
+  - description: "Handles simple voice note"
+    vars:
+      transcription: "Remind me to call John tomorrow at 3pm"
+    assert:
+      - type: contains
+        value: "John"
+      - type: llm-rubric
+        value: "Response is helpful and actionable"
+
+  - description: "Handles technical dictation"
+    vars:
+      transcription: "Create a function that fetches user data from the API and handles errors"
+    assert:
+      - type: llm-rubric
+        value: "Response addresses the technical request clearly"
+
+  - description: "Handles short unclear input"
+    vars:
+      transcription: "um yeah so like the thing"
+    assert:
+      - type: llm-rubric
+        value: "Response asks for clarification politely"
+
+outputPath: ./promptfoo-results.json

@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String        @id @default(cuid())
+  clerkId        String        @unique
+  email          String        @unique
+  createdAt      DateTime      @default(now())
+  records        Record[]
+  subscription   Subscription?
+}
+
+model Record {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  transcription  String
+  aiResponse     String?
+  createdAt      DateTime @default(now())
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id])
+  stripeCustomerId     String   @unique
+  stripeSubscriptionId String?
+  stripePriceId        String?
+  status               String   @default("inactive") // active | inactive | canceled
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
