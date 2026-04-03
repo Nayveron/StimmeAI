@@ -7,15 +7,16 @@ const isProtectedRoute = createRouteMatcher([
   '/api/subscription(.*)',
 ])
 
-// Stripe webhook must be excluded — Clerk modifies the request which breaks signature verification
-const isWebhookRoute = createRouteMatcher(['/api/stripe/webhook'])
-
 export const proxy = clerkMiddleware(async (auth, req) => {
-  // Skip Clerk processing entirely for Stripe webhook
-  if (isWebhookRoute(req)) return
   if (isProtectedRoute(req)) await auth.protect()
 })
 
 export const config = {
-  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
+  // Exclude Stripe webhook entirely — proxy must never touch it,
+  // otherwise the body stream gets consumed and signature verification fails
+  matcher: [
+    '/((?!.*\\..*|_next|api/stripe/webhook).*)',
+    '/',
+    '/(api(?!/stripe/webhook)|trpc)(.*)',
+  ],
 }
