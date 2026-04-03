@@ -7,8 +7,12 @@ const isProtectedRoute = createRouteMatcher([
   '/api/subscription(.*)',
 ])
 
-// Key line: Next.js 16 renamed middleware.ts to proxy.ts — exported function is "proxy"
+// Stripe webhook must be excluded — Clerk modifies the request which breaks signature verification
+const isWebhookRoute = createRouteMatcher(['/api/stripe/webhook'])
+
 export const proxy = clerkMiddleware(async (auth, req) => {
+  // Skip Clerk processing entirely for Stripe webhook
+  if (isWebhookRoute(req)) return
   if (isProtectedRoute(req)) await auth.protect()
 })
 
