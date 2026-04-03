@@ -2,7 +2,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
+  '/checkout(.*)',
   '/api/records(.*)',
+  '/api/subscription(.*)',
 ])
 
 // Key line: Next.js 16 renamed middleware.ts to proxy.ts — exported function is "proxy"

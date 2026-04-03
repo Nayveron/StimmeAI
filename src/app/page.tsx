@@ -21,6 +21,7 @@ export default function HomePage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
   const [audioLevels, setAudioLevels] = useState<number[]>(new Array(32).fill(0))
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -29,6 +30,15 @@ export default function HomePage() {
   const recordingStartRef = useRef<number>(0)
   const streamRef = useRef<MediaStream | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  // Check subscription status for signed-in users
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    fetch('/api/subscription/status')
+      .then((res) => res.json())
+      .then(({ active }) => setHasSubscription(active))
+      .catch(() => setHasSubscription(false))
+  }, [isLoaded, isSignedIn])
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -49,14 +59,22 @@ export default function HomePage() {
   }, [])
 
   const startRecording = async () => {
-    // Wait for Clerk to finish loading before checking auth state
     if (!isLoaded) return
 
-    // Gate logic: anonymous users get 1 free recording, then must sign up
-    // Only triggers on RECORDING attempt, never on navigation
-    const freeRecordUsed = localStorage.getItem('freeRecordUsed')
-    if (!isSignedIn && freeRecordUsed) {
-      setShowAuthModal(true)
+    // Gate logic for recording attempts:
+    // 1. Not signed in + already used free record → show auth modal
+    // 2. Signed in but no subscription → redirect to /checkout (Stripe)
+    // 3. Not signed in + first time → allow free recording
+    // 4. Signed in + has subscription → allow recording
+    if (!isSignedIn) {
+      const freeRecordUsed = localStorage.getItem('freeRecordUsed')
+      if (freeRecordUsed) {
+        setShowAuthModal(true)
+        return
+      }
+    } else if (hasSubscription === false) {
+      // Signed in but no active subscription → send to Stripe
+      router.push('/checkout')
       return
     }
 
@@ -178,16 +196,10 @@ export default function HomePage() {
     }
   }
 
-  const handleGateSignUp = () => {
-    // Set flag so dashboard knows to trigger Stripe after sign-up
-    localStorage.setItem('needsCheckout', 'true')
-    router.push('/sign-up')
-  }
-
-  const handleGateSignIn = () => {
-    localStorage.setItem('needsCheckout', 'true')
-    router.push('/sign-in')
-  }
+  // No localStorage flags needed — Clerk redirects to /checkout after auth,
+  // which checks subscription and redirects to Stripe if needed
+  const handleGateSignUp = () => router.push('/sign-up')
+  const handleGateSignIn = () => router.push('/sign-in')
 
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#07070d]">

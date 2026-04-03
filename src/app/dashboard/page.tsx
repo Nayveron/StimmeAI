@@ -31,17 +31,7 @@ export default function DashboardPage() {
     fetchRecords()
   }, [])
 
-  // Auto-redirect to Stripe checkout only if user came from the payment gate
-  // (signaled by 'needsCheckout' flag, NOT 'freeRecordUsed')
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('success')) return // already paid
-    const needsCheckout = localStorage.getItem('needsCheckout')
-    if (needsCheckout) {
-      localStorage.removeItem('needsCheckout')
-      handleSubscribe()
-    }
-  }, [])
+  // No auto-checkout here — /checkout page handles Stripe redirect now
 
   const fetchRecords = async () => {
     const res = await fetch('/api/records')
