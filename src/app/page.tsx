@@ -53,6 +53,7 @@ export default function HomePage() {
     if (!isLoaded) return
 
     // Gate logic: anonymous users get 1 free recording, then must sign up
+    // Only triggers on RECORDING attempt, never on navigation
     const freeRecordUsed = localStorage.getItem('freeRecordUsed')
     if (!isSignedIn && freeRecordUsed) {
       setShowAuthModal(true)
@@ -63,7 +64,6 @@ export default function HomePage() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
-      // Set up audio analyser for waveform visualization
       const audioCtx = new AudioContext()
       const source = audioCtx.createMediaStreamSource(stream)
       const analyser = audioCtx.createAnalyser()
@@ -89,30 +89,19 @@ export default function HomePage() {
 
         const duration = Date.now() - recordingStartRef.current
 
-        // Silence detection: reject recordings shorter than 1 second
         if (duration < 1000) {
           setMessages((prev) => [
             ...prev,
-            {
-              id: Date.now().toString(),
-              type: 'error',
-              content: 'No voice detected. Please speak clearly.',
-            },
+            { id: Date.now().toString(), type: 'error', content: 'No voice detected. Please speak clearly.' },
           ])
           return
         }
 
         const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' })
-
-        // Check if audio blob is too small (silence produces tiny blobs)
         if (audioBlob.size < 1000) {
           setMessages((prev) => [
             ...prev,
-            {
-              id: Date.now().toString(),
-              type: 'error',
-              content: 'No voice detected. Please speak clearly.',
-            },
+            { id: Date.now().toString(), type: 'error', content: 'No voice detected. Please speak clearly.' },
           ])
           return
         }
@@ -139,7 +128,6 @@ export default function HomePage() {
     setIsProcessing(true)
 
     // Mark free record as used immediately for anonymous users
-    // (before API calls, so refreshing mid-process still counts)
     if (!isSignedIn) {
       localStorage.setItem('freeRecordUsed', 'true')
     }
@@ -148,30 +136,21 @@ export default function HomePage() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.webm')
 
-      const whisperRes = await fetch('/api/whisper', {
-        method: 'POST',
-        body: formData,
-      })
+      const whisperRes = await fetch('/api/whisper', { method: 'POST', body: formData })
       const whisperData = await whisperRes.json()
 
       if (!whisperRes.ok || !whisperData.text) {
         setMessages((prev) => [
           ...prev,
-          {
-            id: Date.now().toString(),
-            type: 'error',
-            content: 'No voice detected. Please speak clearly.',
-          },
+          { id: Date.now().toString(), type: 'error', content: 'No voice detected. Please speak clearly.' },
         ])
         return
       }
 
-      const transcriptionMsg: Message = {
-        id: Date.now().toString(),
-        type: 'transcription',
-        content: whisperData.text,
-      }
-      setMessages((prev) => [...prev, transcriptionMsg])
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), type: 'transcription', content: whisperData.text },
+      ])
 
       const chatRes = await fetch('/api/chat', {
         method: 'POST',
@@ -180,12 +159,10 @@ export default function HomePage() {
       })
       const { response } = await chatRes.json()
 
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: response,
-      }
-      setMessages((prev) => [...prev, aiMsg])
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), type: 'ai', content: response },
+      ])
 
       if (isSignedIn) {
         await fetch('/api/records', {
@@ -201,25 +178,38 @@ export default function HomePage() {
     }
   }
 
+  const handleGateSignUp = () => {
+    // Set flag so dashboard knows to trigger Stripe after sign-up
+    localStorage.setItem('needsCheckout', 'true')
+    router.push('/sign-up')
+  }
+
+  const handleGateSignIn = () => {
+    localStorage.setItem('needsCheckout', 'true')
+    router.push('/sign-in')
+  }
+
   return (
-    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#0a0a0f]">
-      {/* Background gradient */}
+    <div className="min-h-screen flex flex-col relative overflow-hidden bg-[#07070d]">
+      {/* Animated background gradients */}
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute top-[-20%] left-[30%] h-[600px] w-[600px] rounded-full bg-purple-600/10 blur-[128px]" />
-        <div className="absolute bottom-[-10%] right-[20%] h-[400px] w-[400px] rounded-full bg-blue-600/10 blur-[128px]" />
+        <div className="absolute top-[-30%] left-[20%] h-[700px] w-[700px] rounded-full bg-purple-600/8 blur-[160px] animate-pulse [animation-duration:8s]" />
+        <div className="absolute bottom-[-20%] right-[10%] h-[500px] w-[500px] rounded-full bg-blue-600/8 blur-[140px] animate-pulse [animation-duration:12s]" />
+        <div className="absolute top-[40%] right-[40%] h-[300px] w-[300px] rounded-full bg-cyan-500/5 blur-[120px] animate-pulse [animation-duration:10s]" />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/5 backdrop-blur-md bg-black/20">
-        <div className="mx-auto max-w-5xl px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-              <MicIcon className="w-4 h-4 text-white" />
+      {/* Header — taller with more padding */}
+      <header className="relative z-10 border-b border-white/5 backdrop-blur-xl bg-black/30">
+        <div className="mx-auto max-w-5xl px-8 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+              <MicIcon className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-white tracking-tight">StimmeAI</span>
+            <span className="text-xl font-bold text-white tracking-tight">StimmeAI</span>
           </div>
-          <div className="flex gap-2">
-            {isSignedIn ? (
+          <div className="flex gap-3">
+            {/* Dashboard button ONLY shows when signed in */}
+            {isSignedIn && (
               <Button
                 variant="outline"
                 size="sm"
@@ -228,19 +218,20 @@ export default function HomePage() {
               >
                 Dashboard
               </Button>
-            ) : (
+            )}
+            {!isSignedIn && isLoaded && (
               <>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-white/70 hover:text-white hover:bg-white/5"
+                  className="text-white/60 hover:text-white hover:bg-white/5"
                   onClick={() => router.push('/sign-in')}
                 >
                   Sign In
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:opacity-90"
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 hover:opacity-90 shadow-md shadow-purple-500/20"
                   onClick={() => router.push('/sign-up')}
                 >
                   Get Started
@@ -251,58 +242,119 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Main */}
+      {/* Main content */}
       <main className="relative z-10 flex-1 mx-auto w-full max-w-2xl px-6 flex flex-col">
         {messages.length === 0 ? (
-          /* Hero — empty state */
-          <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-            <div className="mb-6">
-              <Badge className="bg-purple-500/10 text-purple-300 border-purple-500/20 mb-6 px-3 py-1">
+          /* ── Landing page ── */
+          <div className="flex-1 flex flex-col">
+            {/* Hero — taller with more breathing room */}
+            <section className="flex flex-col items-center justify-center text-center py-24 sm:py-32">
+              <Badge className="bg-purple-500/10 text-purple-300 border-purple-500/20 mb-8 px-4 py-1.5 text-xs tracking-wide">
                 Powered by Whisper & GPT-4o
               </Badge>
-            </div>
-            <h1 className="text-5xl sm:text-6xl font-extrabold tracking-tight mb-4 leading-[1.1]">
-              <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                Voice to Text
-              </span>
-              <br />
-              <span className="text-white">Intelligence</span>
-            </h1>
-            <p className="text-white/50 text-lg max-w-md mb-10 leading-relaxed">
-              Record your voice and get instant AI-powered transcription
-              and intelligent responses. First recording is free.
-            </p>
-
-            {/* Record button — hero position */}
-            <RecordButton
-              isRecording={isRecording}
-              isProcessing={isProcessing}
-              audioLevels={audioLevels}
-              onStart={startRecording}
-              onStop={stopRecording}
-            />
-            {isRecording && (
-              <p className="mt-4 text-sm text-red-400 animate-pulse tracking-wide">
-                Listening... tap to stop
+              <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight mb-6 leading-[1.05]">
+                <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                  Voice to Text
+                </span>
+                <br />
+                <span className="text-white">Intelligence</span>
+              </h1>
+              <p className="text-white/40 text-lg sm:text-xl max-w-lg mb-12 leading-relaxed">
+                Record your voice and get instant AI-powered transcription
+                and intelligent responses. First recording is free.
               </p>
-            )}
-            {isProcessing && (
-              <p className="mt-4 text-sm text-white/40">Transcribing your voice...</p>
-            )}
+
+              <RecordButton
+                isRecording={isRecording}
+                isProcessing={isProcessing}
+                audioLevels={audioLevels}
+                onStart={startRecording}
+                onStop={stopRecording}
+              />
+              {isRecording && (
+                <p className="mt-5 text-sm text-red-400 animate-pulse tracking-wide">
+                  Listening... tap to stop
+                </p>
+              )}
+              {isProcessing && (
+                <p className="mt-5 text-sm text-white/30">Transcribing your voice...</p>
+              )}
+            </section>
+
+            {/* How it works */}
+            <section className="py-16 border-t border-white/5">
+              <h2 className="text-center text-2xl font-bold text-white mb-2">How it works</h2>
+              <p className="text-center text-white/30 text-sm mb-12">Three simple steps to get started</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                {[
+                  { step: '1', title: 'Record your voice', desc: 'Click the microphone and speak naturally' },
+                  { step: '2', title: 'Get transcription', desc: 'Whisper AI converts your speech to text instantly' },
+                  { step: '3', title: 'Receive AI response', desc: 'GPT-4o analyzes your text and responds intelligently' },
+                ].map((item) => (
+                  <div key={item.step} className="flex flex-col items-center text-center">
+                    <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 border border-purple-500/20 flex items-center justify-center mb-4">
+                      <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">{item.step}</span>
+                    </div>
+                    <h3 className="text-white font-semibold text-sm mb-1">{item.title}</h3>
+                    <p className="text-white/30 text-xs leading-relaxed">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Features */}
+            <section className="py-16 border-t border-white/5">
+              <h2 className="text-center text-2xl font-bold text-white mb-2">Features</h2>
+              <p className="text-center text-white/30 text-sm mb-12">Everything you need in a voice AI platform</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <Card className="bg-white/[0.03] border-white/8 shadow-xl shadow-black/20 hover:border-purple-500/20 transition-colors">
+                  <CardContent className="p-6 text-center">
+                    <div className="h-12 w-12 rounded-xl bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
+                      <ZapIcon className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <h3 className="text-white font-semibold mb-2">Instant Transcription</h3>
+                    <p className="text-white/30 text-xs leading-relaxed">
+                      Whisper AI converts voice to text in seconds with industry-leading accuracy
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-white/[0.03] border-white/8 shadow-xl shadow-black/20 hover:border-blue-500/20 transition-colors">
+                  <CardContent className="p-6 text-center">
+                    <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center mx-auto mb-4">
+                      <BrainIcon className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <h3 className="text-white font-semibold mb-2">AI-Powered Responses</h3>
+                    <p className="text-white/30 text-xs leading-relaxed">
+                      GPT-4o analyzes and responds to your recording with intelligent suggestions
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-white/[0.03] border-white/8 shadow-xl shadow-black/20 hover:border-cyan-500/20 transition-colors">
+                  <CardContent className="p-6 text-center">
+                    <div className="h-12 w-12 rounded-xl bg-cyan-500/10 flex items-center justify-center mx-auto mb-4">
+                      <ShieldIcon className="w-6 h-6 text-cyan-400" />
+                    </div>
+                    <h3 className="text-white font-semibold mb-2">Secure & Private</h3>
+                    <p className="text-white/30 text-xs leading-relaxed">
+                      Your data is encrypted and stored safely with enterprise-grade security
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </section>
+
+            {/* Footer spacer */}
+            <div className="py-8" />
           </div>
         ) : (
-          /* Chat — messages state */
+          /* ── Chat view ── */
           <>
             <ScrollArea className="flex-1 py-6">
               <div className="space-y-4">
                 {messages.map((msg) => (
                   <div
                     key={msg.id}
-                    className={
-                      msg.type === 'transcription'
-                        ? 'flex justify-end'
-                        : 'flex justify-start'
-                    }
+                    className={msg.type === 'transcription' ? 'flex justify-end' : 'flex justify-start'}
                   >
                     {msg.type === 'error' ? (
                       <Card className="max-w-[85%] bg-red-500/10 border-red-500/20 shadow-lg shadow-red-500/5">
@@ -313,22 +365,14 @@ export default function HomePage() {
                     ) : msg.type === 'transcription' ? (
                       <Card className="max-w-[85%] bg-gradient-to-br from-purple-500/20 to-blue-500/20 border-purple-500/10 shadow-lg shadow-purple-500/5">
                         <CardContent className="p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs">
-                              You
-                            </Badge>
-                          </div>
+                          <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs mb-2">You</Badge>
                           <p className="text-sm text-white/90 leading-relaxed">{msg.content}</p>
                         </CardContent>
                       </Card>
                     ) : (
                       <Card className="max-w-[85%] bg-white/5 border-white/10 shadow-lg shadow-black/20">
                         <CardContent className="p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs">
-                              AI
-                            </Badge>
-                          </div>
+                          <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs mb-2">AI</Badge>
                           <p className="text-sm text-white/80 leading-relaxed">{msg.content}</p>
                         </CardContent>
                       </Card>
@@ -352,7 +396,6 @@ export default function HomePage() {
               </div>
             </ScrollArea>
 
-            {/* Bottom record bar */}
             <div className="py-6 flex flex-col items-center gap-3 border-t border-white/5">
               <RecordButton
                 isRecording={isRecording}
@@ -370,7 +413,7 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* Auth Modal */}
+      {/* Auth Modal — only triggered by recording gate */}
       {showAuthModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <Card className="w-full max-w-sm mx-4 bg-[#12121a] border-white/10 shadow-2xl">
@@ -391,14 +434,15 @@ export default function HomePage() {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
-                  onClick={() => router.push('/sign-in')}
+                  variant="outline"
+                  className="border-white/10 bg-white/5 text-white hover:bg-white/10"
+                  onClick={handleGateSignIn}
                 >
                   Sign In
                 </Button>
                 <Button
                   className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0"
-                  onClick={() => router.push('/sign-up')}
+                  onClick={handleGateSignUp}
                 >
                   Get Started
                 </Button>
@@ -434,29 +478,22 @@ function RecordButton({
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Waveform visualizer — visible only while recording */}
       {isRecording && (
         <div className="flex items-center justify-center gap-[2px]" style={{ height: waveH, width: waveW }}>
           {audioLevels.map((level, i) => (
             <div
               key={i}
               className="w-[3px] rounded-full bg-gradient-to-t from-purple-500 to-blue-400 transition-all duration-75"
-              style={{
-                height: `${Math.max(8, level * 100)}%`,
-                opacity: 0.4 + level * 0.6,
-              }}
+              style={{ height: `${Math.max(8, level * 100)}%`, opacity: 0.4 + level * 0.6 }}
             />
           ))}
         </div>
       )}
-
-      {/* Button */}
       <div className="relative">
-        {/* Pulse rings when recording */}
         {isRecording && (
           <>
             <span className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
-            <span className="absolute -inset-2 rounded-full bg-red-500/10 animate-pulse" />
+            <span className="absolute -inset-3 rounded-full bg-red-500/10 animate-pulse" />
           </>
         )}
         <button
@@ -466,18 +503,13 @@ function RecordButton({
             relative ${btnSize} rounded-full flex items-center justify-center
             transition-all duration-200 cursor-pointer
             disabled:opacity-40 disabled:cursor-not-allowed
-            ${
-              isRecording
-                ? 'bg-red-500 shadow-lg shadow-red-500/30 hover:bg-red-600'
-                : 'bg-gradient-to-br from-purple-500 to-blue-500 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-105'
+            ${isRecording
+              ? 'bg-red-500 shadow-lg shadow-red-500/30 hover:bg-red-600'
+              : 'bg-gradient-to-br from-purple-500 to-blue-500 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 hover:scale-105'
             }
           `}
         >
-          {isRecording ? (
-            <StopIcon className={`${iconSize} text-white`} />
-          ) : (
-            <MicIcon className={`${iconSize} text-white`} />
-          )}
+          {isRecording ? <StopIcon className={`${iconSize} text-white`} /> : <MicIcon className={`${iconSize} text-white`} />}
         </button>
       </div>
     </div>
@@ -500,6 +532,33 @@ function StopIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24">
       <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  )
+}
+
+function ZapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  )
+}
+
+function BrainIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+      <line x1="9" y1="21" x2="15" y2="21" />
+      <line x1="10" y1="23" x2="14" y2="23" />
+    </svg>
+  )
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <polyline points="9 12 11 14 15 10" />
     </svg>
   )
 }
