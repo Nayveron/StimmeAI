@@ -21,11 +21,20 @@ export async function POST(req: NextRequest) {
     const clerkUserId = session.metadata?.clerkUserId
 
     if (clerkUserId) {
-      // Key line: upsert subscription — creates if new, updates if exists
+      // Ensure user exists before creating subscription
+      const user = await prisma.user.upsert({
+        where: { clerkId: clerkUserId },
+        create: {
+          clerkId: clerkUserId,
+          email: session.customer_details?.email || '',
+        },
+        update: {},
+      })
+
       await prisma.subscription.upsert({
         where: { stripeCustomerId: session.customer as string },
         create: {
-          user: { connect: { clerkId: clerkUserId } },
+          userId: user.id,
           stripeCustomerId: session.customer as string,
           stripeSubscriptionId: session.subscription as string,
           stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID!,
